@@ -498,19 +498,20 @@ def build_scenes(quick=False):
 
 
 def render(lang, scenes, out_mp4, fade=0.35):
-    total = sum(d for d, _ in scenes)
+    total = sum(sc[0] for sc in scenes)
     print(f"Renderizando {lang}: {total:.1f}s, {round(total * FPS)} fotogramas")
     ff = subprocess.Popen([
         "ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
         "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "18",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out_mp4)], stdin=subprocess.PIPE)
     n = 0
-    for dur, fn in scenes:
+    for dur, fn, *opt in scenes:
+        fd = opt[0] if opt else fade  # fundido propio de la escena (0 = corte seco)
         for i in range(round(dur * FPS)):
             t = i / FPS
             c = Image.new("RGBA", (W, H), BLACK + (255,))
             fn(c, t, lang)
-            k = min(1.0, t / fade, (dur - t) / fade)
+            k = min(1.0, t / fd, (dur - t) / fd) if fd else 1.0
             img = c.convert("RGB")
             if k < 1:
                 img = ImageChops.multiply(img, Image.new("RGB", (W, H), (round(255 * k),) * 3))
