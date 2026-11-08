@@ -1,6 +1,17 @@
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/marca/logotipo.svg">
+    <img src="docs/marca/logotipo-mono-oscuro.svg" alt="thealejandro" height="32">
+  </picture>
+</p>
+
 # omarchy-screensaver-fx
 
 [English](README.md)
+
+![Screensaver FX](docs/demo.gif)
+
+[Ver el vídeo completo (1 min)](docs/demo-es.mp4) · [Página web](https://thealejandro.dev/omarchy/screensaver)
 
 Más animaciones para el salvapantallas de [Omarchy](https://omarchy.org), sin
 reemplazarlo. Conservas todos los efectos de `ttfx` de Omarchy y además:
@@ -85,6 +96,20 @@ grande y otra más pequeña) con letras de bloques dibujadas a mano al estilo
 del logo de Omarchy. Viene con `JACC` / `XACODE`: cambia las letras y las
 palabras y ejecútalo, o instálalo con `./install.sh --with-generator`.
 
+## Vídeo de demostración
+
+`tools/demo/make_demo.py` graba cada animación en una terminal virtual y
+genera el vídeo, el GIF y las capturas de `docs/` (necesita `ffmpeg`,
+`rsvg-convert` y un `screensaver.txt`):
+
+```bash
+uv run --with pyte --with pillow tools/demo/make_demo.py
+```
+
 ## Licencia
 
 [MIT](LICENSE)
+
+---
+
+Hecho por [thealejandro](https://thealejandro.dev).
