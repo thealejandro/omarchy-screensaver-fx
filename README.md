@@ -1,6 +1,17 @@
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/marca/logotipo.svg">
+    <img src="docs/marca/logotipo-mono-oscuro.svg" alt="thealejandro" height="32">
+  </picture>
+</p>
+
 # omarchy-screensaver-fx
 
 [Español](README.es.md)
+
+![Screensaver FX](docs/demo.gif)
+
+[Watch the full video (1 min)](docs/demo-en.mp4) · [Web page](https://thealejandro.dev/omarchy/screensaver)
 
 More animations for the [Omarchy](https://omarchy.org) screensaver, without
 replacing it. You keep all of Omarchy's `ttfx` effects and get:
@@ -81,6 +92,20 @@ smaller one) with hand-drawn block letters in Omarchy's logo style. It ships
 with `JACC` / `XACODE`; edit the glyphs and words and run it, or install it
 with `./install.sh --with-generator`.
 
+## Demo video
+
+`tools/demo/make_demo.py` records every animation in a virtual terminal and
+builds the video, the GIF and the screenshots in `docs/` (it needs `ffmpeg`,
+`rsvg-convert` and a `screensaver.txt`):
+
+```bash
+uv run --with pyte --with pillow tools/demo/make_demo.py
+```
+
 ## License
 
 [MIT](LICENSE)
+
+---
+
+Made by [thealejandro](https://thealejandro.dev).
