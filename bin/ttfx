@@ -10,6 +10,15 @@
 # Comprobación tras cada `omarchy update`: ~/.config/omarchy/hooks/post-update.d/screensaver-fx-check
 # https://github.com/thealejandro/omarchy-screensaver-fx
 
+# Mensaje en el idioma de Omarchy: msg "texto en español" "text in English"
+msg() {
+  local l=
+  read -r l _ <"${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/language" 2>/dev/null || true
+  l=${l:-${LC_ALL:-${LC_TIME:-${LANG:-}}}}
+  l=${l,,}
+  if [[ ${l:0:2} == es ]]; then printf '%s' "$1"; else printf '%s' "$2"; fi
+}
+
 PROB_PROPIAS=35   # % de ciclos con animación propia
 PROB_TEMA=50      # % del resto que usa los colores del tema
 
@@ -22,7 +31,7 @@ real=""
 while IFS= read -r candidate; do
   [[ $(realpath "$candidate") != "$self" ]] && { real=$candidate; break; }
 done < <(type -ap ttfx)
-[[ -z $real ]] && { echo "ttfx: no se encuentra el ttfx real" >&2; exit 127; }
+[[ -z $real ]] && { echo "$(msg "ttfx: no se encuentra el ttfx real" "ttfx: the real ttfx was not found")" >&2; exit 127; }
 
 # ¿Es la llamada del salvapantallas?
 is_screensaver=0
