@@ -21,7 +21,8 @@ from datetime import datetime
 from pathlib import Path
 
 ART = Path.home() / ".config/omarchy/branding/screensaver.txt"
-THEME = Path.home() / ".local/state/omarchy/current/theme/colors.toml"
+THEME = Path(os.environ.get("SCREENSAVER_FX_THEME")
+             or Path.home() / ".local/state/omarchy/current/theme/colors.toml")
 FPS = 30
 CSI = "\x1b["
 WHITE = (255, 255, 255)
@@ -131,7 +132,9 @@ class Screen:
 
     def flush(self):
         if self.buf:
-            sys.stdout.write("".join(self.buf))
+            # Synchronized output: la terminal pinta el fotograma entero de una vez,
+            # sin mostrar el rótulo a medio redibujar (las que no lo soportan lo ignoran).
+            sys.stdout.write(f"{CSI}?2026h" + "".join(self.buf) + f"{CSI}?2026l")
             sys.stdout.flush()
             self.buf = []
 
@@ -387,6 +390,8 @@ def main():
     if name not in EFFECTS:
         sys.exit(f"Efecto desconocido: {name}. Disponibles: {', '.join(EFFECTS)}")
     fn, default = EFFECTS[name]
+    if os.environ.get("SCREENSAVER_FX_SEED"):  # para demos reproducibles
+        random.seed(os.environ["SCREENSAVER_FX_SEED"])
 
     def restore(*_):
         sys.stdout.write(f"{CSI}0m{CSI}?25h")
