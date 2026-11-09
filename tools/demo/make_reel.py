@@ -17,12 +17,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont
-
 sys.path.insert(0, str(Path(__file__).parent))
 import make_demo as m  # noqa: E402
 
 m.W, m.H = W, H = 1080, 1920
+m.SCALE = 1                       # 1080x1920 es el máximo de reels e historias
 FPS = m.FPS
 WHITE, GRAY = m.WHITE, m.GRAY
 
@@ -47,7 +46,7 @@ PANEL = (60, 640, 960, 576)       # x, y, ancho, alto (5:3, como la terminal)
 
 def multiline_in(c, xy, s, font, fill, t, delay=0.0, gap=1.15):
     lines = s.split("\n")
-    size = font.size * gap
+    size = font.size / m.SCALE * gap
     y0 = xy[1] - size * (len(lines) - 1) / 2
     for i, line in enumerate(lines):
         m.text_in(c, (xy[0], y0 + i * size), line, font, fill, t, delay + i * 0.12)
@@ -58,7 +57,7 @@ def chip(c, xy, s, rgb, k):
     if k <= 0:
         return
     f = m.inter("SemiBold", 34)
-    d = ImageDraw.Draw(c)
+    d = m.Draw(c)
     tw = d.textlength(s, font=f)
     x, y = xy[0] - tw / 2 - 28, xy[1] - 30 + 10 * (1 - k)
     d.rounded_rectangle([x, y, x + tw + 56, y + 60], 30, fill=rgb + (round(56 * k),),
@@ -70,8 +69,7 @@ def build(quick=False):
     main_theme = m.THEMES[0]
     env = {"SCREENSAVER_FX_THEME": str(m.theme_file(main_theme)), "SCREENSAVER_FX_SEED": "7"}
     tint = m.accent(main_theme)
-    fx = {n: m.capture(f"fx-{n}", [sys.executable, "-I", str(m.FX), n, "--seconds", "5.6"], 5.2, env)
-          for n in m.OWN}
+    fx = {n: m.fx_frames(n, 5.6, 5.2, env) for n in m.OWN}
     keep = [(m.capture(f"ttfx-{e}", m.ttfx_cmd(e), 6.5), e, t0, v) for e, t0, v in m.TTFX_KEEP]
     tri = [m.capture(f"ttfx-{m.TTFX_THEMED}-{s}", m.ttfx_cmd(m.TTFX_THEMED, m.palette(s)), 6.4)
            for s in m.THEMES]
@@ -82,7 +80,7 @@ def build(quick=False):
     def hook(c, t, L):
         T = TEXT[L]
         multiline_in(c, (W / 2, 400), T["hook"], m.inter("Bold", 92), WHITE, t, 0.0)
-        m.panel(c, m.render_term(m.frame_at(fx["plasma"], 1.6 + t)), PANEL, 1.0, tint)
+        m.panel(c, m.frame_at(fx["plasma"][L], 1.6 + t), PANEL, 1.0, tint)
         m.text_in(c, (W / 2, 1360), T["title"], m.inter("Bold", 64), WHITE, t, 0.7)
         m.text_in(c, (W / 2, 1430), T["for"], m.inter("Medium", 36), GRAY, t, 0.9)
     scenes.append((3.0, hook))
@@ -94,8 +92,8 @@ def build(quick=False):
         m.text_in(c, (W / 2, 420), TEXT[L]["keep"], m.inter("Bold", 64), WHITE, t, 0.0)
         i = min(len(keep) - 1, int(t / clip))
         fr, name, t0, v = keep[i]
-        m.panel(c, m.render_term(m.frame_at(fr, t0 + 0.8 + (t - i * clip) * v * 1.4)), PANEL, 1.0, (120, 120, 140))
-        m.text_in(c, (W / 2, 1290), f"ttfx · {name}", ImageFont.truetype(m.MONO, 32), GRAY, t,
+        m.panel(c, m.frame_at(fr, t0 + 0.8 + (t - i * clip) * v * 1.4), PANEL, 1.0, (120, 120, 140))
+        m.text_in(c, (W / 2, 1290), f"ttfx · {name}", m.mono(32), GRAY, t,
                   i * clip + 0.05, 0.3, rise=6)
     scenes.append((clip * len(keep), keep_scene, 0))
 
@@ -107,10 +105,10 @@ def build(quick=False):
         def own(c, t, L, name=name, start=start, j=j):
             T = TEXT[L]
             m.text_in(c, (W / 2, 420), T["plus"], m.inter("Bold", 72), WHITE, t, 0.0 if j == 0 else -1)
-            m.panel(c, m.render_term(m.frame_at(fx[name], start + t)), PANEL, 1.0, tint)
+            m.panel(c, m.frame_at(fx[name][L], start + t), PANEL, 1.0, tint)
             chip(c, (W / 2, 1320), T["names"][name], tint, m.ease(t / 0.35))
             # puntos de progreso
-            d = ImageDraw.Draw(c)
+            d = m.Draw(c)
             for k in range(len(m.OWN)):
                 cx = W / 2 + (k - (len(m.OWN) - 1) / 2) * 30
                 on = k == j
@@ -127,10 +125,10 @@ def build(quick=False):
             if k <= 0:
                 continue
             y = 450 + i * 400
-            m.panel(c, m.render_term(m.frame_at(fr, 1.0 + t * 1.3)), (90, y, pw, ph), k, tints[i])
+            m.panel(c, m.frame_at(fr, 1.0 + t * 1.3), (90, y, pw, ph), k, tints[i])
             m.text_in(c, (720, y + ph / 2 - 24), slug, m.inter("SemiBold", 38), WHITE, t, 0.4 + i * 0.18,
                       0.5, anchor="lm", rise=8)
-            d = ImageDraw.Draw(c)
+            d = m.Draw(c)
             for jj, hx in enumerate(m.palette(slug)[:4] if not hasattr(themed, slug) else getattr(themed, slug)):
                 rgb = tuple(int(hx[a:a + 2], 16) for a in (0, 2, 4))
                 cx, cy = 734 + jj * 40, y + ph / 2 + 34
@@ -150,9 +148,7 @@ def build(quick=False):
         m.text_in(c, (W / 2, 1150), "thealejandro.dev/omarchy/screensaver", m.inter("Regular", 34), GRAY, t, 1.1)
         k = m.ease((t - 1.4) / 0.7)
         if k > 0 and (logo := m.brand_logo(46)):
-            lg = logo.copy()
-            lg.putalpha(lg.getchannel("A").point(lambda a: round(a * k)))
-            c.alpha_composite(lg, (round(W / 2 - lg.width / 2), round(1380 + 10 * (1 - k))))
+            m.paste_logo(c, logo, 1380, k)
     scenes.append((4.4, outro))
     return scenes
 
