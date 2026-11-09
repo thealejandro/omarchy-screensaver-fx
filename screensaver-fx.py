@@ -206,7 +206,7 @@ def fx_starfield(s, pal, secs):
             if s.x0 - 2 <= x < s.x0 + s.w + 2 and s.y0 - 1 <= y < s.y0 + s.h + 1:
                 continue  # el rótulo queda limpio, las estrellas pasan por fuera
             z = st[2]
-            ch = "·" if z > 0.66 else "•" if z > 0.33 else "✦"
+            ch = "·" if z > 0.66 else "•" if z > 0.33 else "✶"
             s.put(x, y, ch, scale(WHITE, 1.15 - z))
             prev.append((x, y))
         fade = min(1.0, max(0.0, (t - 1.5) / 2.5))
@@ -314,6 +314,8 @@ MONTHS = ["January", "February", "March", "April", "May", "June", "July",
 
 def language():
     """Idioma de Omarchy (omarchy language); si no hay, el del locale."""
+    if os.environ.get("SCREENSAVER_FX_LANG"):  # para demos en cada idioma
+        return os.environ["SCREENSAVER_FX_LANG"][:2].lower()
     f = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "omarchy/language"
     try:
         code = f.read_text().split()[0]

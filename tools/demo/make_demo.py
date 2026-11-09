@@ -3,7 +3,7 @@
 
 Ejecuta de verdad cada animación en una terminal virtual (pty + pyte), dibuja
 los fotogramas con Pillow (los bloques ▀▄█ se trazan como rectángulos para que
-queden nítidos) y monta una presentación a 1920x1080 con ffmpeg.
+queden nítidos) y monta una presentación a 2560x1440 con ffmpeg.
 
 Uso (desde la raíz del repo):
     uv run --with pyte --with pillow tools/demo/make_demo.py [--lang en|es|all] [--quick]
@@ -16,7 +16,6 @@ en ~/.cache/omarchy-screensaver-fx/demo para no repetirlas.
 import argparse
 import fcntl
 import io
-import math
 import os
 import pickle
 import pty
@@ -44,12 +43,18 @@ THEMES_DIRS = [Path.home() / ".config/omarchy/themes", Path("/usr/share/omarchy/
 INTER_URL = "https://github.com/rsms/inter/releases/download/v4.1/Inter-4.1.zip"
 MONO = "/usr/share/fonts/TTF/JetBrainsMonoNerdFont-Regular.ttf"
 
-W, H, FPS = 1920, 1080, 30
+W, H, FPS = 1920, 1080, 30   # maqueta: todas las coordenadas van en estas unidades
+SCALE = 4 / 3                 # salida a 2560x1440, nítida en pantallas 2K y Retina
 COLS, ROWS = 100, 30          # terminal de la demo
-CW, CH = 15, 30               # celda en px -> 1500x900
+CW, CH = 15, 30               # celda en px -> 1500x900 (capturas sueltas)
 BLACK = (0, 0, 0)
 WHITE = (245, 245, 247)
 GRAY = (134, 134, 139)        # gris de subtítulo
+
+
+def px(v):
+    """Unidades de maqueta -> píxeles de salida."""
+    return round(v * SCALE)
 
 
 # ── Fuentes ──────────────────────────────────────────────────────────────────
@@ -65,7 +70,11 @@ def inter(weight: str, size: int) -> ImageFont.FreeTypeFont:
             for n in z.namelist():
                 if n.startswith("extras/ttf/InterDisplay-") and n.endswith(".ttf"):
                     (d / Path(n).name).write_bytes(z.read(n))
-    return ImageFont.truetype(str(f), size)
+    return ImageFont.truetype(str(f), px(size))
+
+
+def mono(size: int) -> ImageFont.FreeTypeFont:
+    return ImageFont.truetype(MONO, px(size))
 
 
 # ── Captura de terminal ──────────────────────────────────────────────────────
@@ -174,45 +183,47 @@ def snapshot(screen):
 
 # ── Dibujo de la terminal ────────────────────────────────────────────────────
 
-_glyphs: dict[str, Image.Image] = {}
+_glyphs: dict = {}
 
 
-def glyph(ch: str) -> Image.Image:
-    if ch not in _glyphs:
-        f = ImageFont.truetype(MONO, int(CH * 0.62))
-        m = Image.new("L", (CW, CH), 0)
-        ImageDraw.Draw(m).text((CW / 2, CH / 2), ch, font=f, fill=255, anchor="mm")
-        _glyphs[ch] = m
-    return _glyphs[ch]
+def glyph(ch: str, cw: int, chh: int) -> Image.Image:
+    key = (ch, cw, chh)
+    if key not in _glyphs:
+        f = ImageFont.truetype(MONO, int(chh * 0.62))
+        m = Image.new("L", (cw, chh), 0)
+        ImageDraw.Draw(m).text((cw / 2, chh / 2), ch, font=f, fill=255, anchor="mm")
+        _glyphs[key] = m
+    return _glyphs[key]
 
 
 SHADE = {"░": 0.25, "▒": 0.5, "▓": 0.75}
 
 
-def render_term(cells) -> Image.Image:
-    im = Image.new("RGB", (COLS * CW, ROWS * CH), BLACK)
+def render_term(cells, cw: int = CW, chh: int = CH) -> Image.Image:
+    """Pinta la terminal con celdas de cw x chh px (sin reescalar después)."""
+    im = Image.new("RGB", (COLS * cw, ROWS * chh), BLACK)
     d = ImageDraw.Draw(im)
     for x, y, ch, fg, bg in cells:
-        px, py = x * CW, y * CH
+        px, py = x * cw, y * chh
         if bg and bg != BLACK:
-            d.rectangle([px, py, px + CW - 1, py + CH - 1], fill=bg)
+            d.rectangle([px, py, px + cw - 1, py + chh - 1], fill=bg)
         if ch == "█":
-            d.rectangle([px, py, px + CW - 1, py + CH - 1], fill=fg)
+            d.rectangle([px, py, px + cw - 1, py + chh - 1], fill=fg)
         elif ch == "▀":
-            d.rectangle([px, py, px + CW - 1, py + CH // 2 - 1], fill=fg)
+            d.rectangle([px, py, px + cw - 1, py + chh // 2 - 1], fill=fg)
         elif ch == "▄":
-            d.rectangle([px, py + CH // 2, px + CW - 1, py + CH - 1], fill=fg)
+            d.rectangle([px, py + chh // 2, px + cw - 1, py + chh - 1], fill=fg)
         elif ch == "▌":
-            d.rectangle([px, py, px + CW // 2 - 1, py + CH - 1], fill=fg)
+            d.rectangle([px, py, px + cw // 2 - 1, py + chh - 1], fill=fg)
         elif ch == "▐":
-            d.rectangle([px + CW // 2, py, px + CW - 1, py + CH - 1], fill=fg)
+            d.rectangle([px + cw // 2, py, px + cw - 1, py + chh - 1], fill=fg)
         elif ch in SHADE:
             k = SHADE[ch]
             base = bg or BLACK
-            d.rectangle([px, py, px + CW - 1, py + CH - 1],
+            d.rectangle([px, py, px + cw - 1, py + chh - 1],
                         fill=tuple(round(base[i] + (fg[i] - base[i]) * k) for i in range(3)))
         elif ch.strip():
-            im.paste(fg, (px, py), glyph(ch))
+            im.paste(fg, (px, py), glyph(ch, cw, chh))
     return im
 
 
@@ -229,7 +240,7 @@ def text_in(canvas, xy, s, font, fill, t, delay=0.0, dur=0.7, anchor="mm", rise=
     if k <= 0:
         return
     layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    ImageDraw.Draw(layer).text((xy[0], xy[1] + rise * (1 - k)), s, font=font,
+    ImageDraw.Draw(layer).text((xy[0] * SCALE, (xy[1] + rise * (1 - k)) * SCALE), s, font=font,
                                fill=fill + (round(255 * k),), anchor=anchor)
     canvas.alpha_composite(layer)
 
@@ -254,31 +265,74 @@ def glow(size, rgb, strength=0.55):
     key = (size, rgb, strength)
     if key not in _glows:
         w, h = size
-        g = Image.new("RGBA", (w + 400, h + 400), (0, 0, 0, 0))
-        ImageDraw.Draw(g).rounded_rectangle([200, 260, w + 200, h + 200], 60,
+        m = px(200)
+        g = Image.new("RGBA", (w + 2 * m, h + 2 * m), (0, 0, 0, 0))
+        ImageDraw.Draw(g).rounded_rectangle([m, px(260), w + m, h + m], px(60),
                                             fill=rgb + (round(255 * strength),))
-        _glows[key] = g.filter(ImageFilter.GaussianBlur(110))
+        _glows[key] = g.filter(ImageFilter.GaussianBlur(px(110)))
     return _glows[key]
 
 
-def panel(canvas, term_img, box, k=1.0, tint=(90, 110, 255)):
-    """Pega la terminal como una pantalla con esquinas redondeadas, borde y halo."""
-    x, y, w, h = box
-    y = round(y + 40 * (1 - k))
+def panel(canvas, term, box, k=1.0, tint=(90, 110, 255)):
+    """Pega la terminal como una pantalla con esquinas redondeadas, borde y halo.
+
+    term son las celdas de un fotograma: se pintan ya al tamaño de la pantalla, sin
+    reescalar, para que los bloques queden nítidos. box va en unidades de maqueta.
+    """
+    bx, by, bw, bh = (v * SCALE for v in box)
+    img = render_term(term, max(1, int(bw // COLS)), max(1, int(bh // ROWS))).convert("RGBA")
+    w, h = img.size
+    x = round(bx + (bw - w) / 2)
+    y = round(by + (bh - h) / 2 + px(40) * (1 - k))
     g = glow((w, h), tint)
     if k < 1:
         g = g.copy()
         g.putalpha(g.getchannel("A").point(lambda a: round(a * k)))
-    canvas.alpha_composite(g, (x - 200, y - 200))
-    img = term_img.resize((w, h), Image.LANCZOS).convert("RGBA")
-    mask = rounded_mask((w, h), max(12, w // 55))
+    canvas.alpha_composite(g, (x - px(200), y - px(200)))
+    r = max(px(12), w // 55)
+    mask = rounded_mask((w, h), r)
     if k < 1:
         mask = mask.point(lambda a: round(a * k))
     canvas.paste(img, (x, y), mask)
     border = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    ImageDraw.Draw(border).rounded_rectangle([0, 0, w - 1, h - 1], max(12, w // 55),
-                                             outline=(255, 255, 255, round(34 * k)), width=2)
+    ImageDraw.Draw(border).rounded_rectangle([0, 0, w - 1, h - 1], r,
+                                             outline=(255, 255, 255, round(34 * k)), width=max(1, px(2)))
     canvas.alpha_composite(border, (x, y))
+
+
+class Draw:
+    """ImageDraw en unidades de maqueta: escala posiciones, radios y grosores."""
+
+    def __init__(self, canvas):
+        self.d = ImageDraw.Draw(canvas)
+
+    @staticmethod
+    def _xy(xy):
+        if isinstance(xy[0], (tuple, list)):
+            return [(a * SCALE, b * SCALE) for a, b in xy]
+        return [v * SCALE for v in xy]
+
+    def textlength(self, s, font):
+        return self.d.textlength(s, font=font) / SCALE
+
+    def ellipse(self, xy, **kw):
+        self.d.ellipse(self._xy(xy), **kw)
+
+    def line(self, xy, width=1, **kw):
+        self.d.line(self._xy(xy), width=max(1, px(width)), **kw)
+
+    def rounded_rectangle(self, xy, r, width=1, **kw):
+        self.d.rounded_rectangle(self._xy(xy), px(r), width=max(1, px(width)), **kw)
+
+    def text(self, xy, s, **kw):
+        self.d.text(tuple(self._xy(xy)), s, **kw)
+
+
+def paste_logo(canvas, logo, y, k):
+    """Logotipo centrado en horizontal, con su fundido; y en unidades de maqueta."""
+    lg = logo.copy()
+    lg.putalpha(lg.getchannel("A").point(lambda a: round(a * k)))
+    canvas.alpha_composite(lg, (round(canvas.width / 2 - lg.width / 2), px(y + 10 * (1 - k))))
 
 
 def frame_at(frames, t):
@@ -360,6 +414,7 @@ _logo = {}
 
 def brand_logo(height):
     """Logotipo de thealejandro (docs/marca, versión para fondo oscuro)."""
+    height = px(height)
     if height not in _logo:
         svg = DOCS / "marca/logotipo.svg"
         try:
@@ -379,6 +434,16 @@ def ttfx_cmd(effect, stops=None):
     if stops:
         cmd += ["--final-gradient-stops", *stops, "--final-gradient-direction", "diagonal"]
     return cmd
+
+
+def fx_frames(name, seconds, dur, env):
+    """Capturas de una animación propia por idioma. Solo el reloj cambia (la fecha va en el idioma)."""
+    def run(tag, e):
+        return capture(f"fx-{tag}", [sys.executable, "-I", str(FX), name, "--seconds", str(seconds)], dur, e)
+    if name != "clock":
+        fr = run(name, env)
+        return {"en": fr, "es": fr}
+    return {L: run(f"{name}-{L}", {**env, "SCREENSAVER_FX_LANG": L}) for L in ("en", "es")}
 
 
 def build_scenes(quick=False):
@@ -406,8 +471,8 @@ def build_scenes(quick=False):
         text_in(c, (W / 2, 196), T["keep_s"], inter("Regular", 34), GRAY, t, 0.25)
         i = min(len(keep) - 1, int(t / clip))
         fr, name, t0, v = keep[i]
-        panel(c, render_term(frame_at(fr, t0 + (t - i * clip) * v)), (360, 268, 1200, 720), ease(t / 0.8), (120, 120, 140))
-        text_in(c, (W / 2, 1030), f"ttfx · {name}", ImageFont.truetype(MONO, 26), GRAY, t, i * clip + 0.1, 0.4, rise=8)
+        panel(c, frame_at(fr, t0 + (t - i * clip) * v), (360, 268, 1200, 720), ease(t / 0.8), (120, 120, 140))
+        text_in(c, (W / 2, 1030), f"ttfx · {name}", mono(26), GRAY, t, i * clip + 0.1, 0.4, rise=8)
     scenes.append((6.0, keep_scene))
 
     # 3. Interludio
@@ -417,14 +482,14 @@ def build_scenes(quick=False):
 
     # 4. Animaciones propias
     for name in OWN:
-        fr = capture(f"fx-{name}", [sys.executable, "-I", str(FX), name, "--seconds", str(fx_len + 1)],
-                     fx_len + 0.6, env_theme)
+        fr = fx_frames(name, fx_len + 1, fx_len + 0.6, env_theme)
 
         def own(c, t, L, fr=fr, name=name):
+            fr = fr[L]
             label, line = TEXT[L][name]
             text_in(c, (W / 2, 104), label.upper(), inter("SemiBold", 30), tint, t, 0.0, 0.6, rise=12)
             text_in(c, (W / 2, 170), line, inter("Bold", 72), WHITE, t, 0.12)
-            panel(c, render_term(frame_at(fr, t)), (400, 262, 1120, 672), ease(t / 0.7), tint)
+            panel(c, frame_at(fr, t), (400, 262, 1120, 672), ease(t / 0.7), tint)
         scenes.append((fx_len, own))
 
     # 5. Colores del tema: tríptico
@@ -442,7 +507,7 @@ def build_scenes(quick=False):
             if k <= 0:
                 continue
             x = x0 + i * (pw + gap)
-            panel(c, render_term(frame_at(fr, t - 0.3)), (x, 360, pw, ph), k, tints[i])
+            panel(c, frame_at(fr, t - 0.3), (x, 360, pw, ph), k, tints[i])
             text_in(c, (x + pw / 2, 760), slug, inter("Medium", 30), GRAY, t, 0.6 + i * 0.15, 0.6, rise=10)
             dots = palette(slug) if not hasattr(themed, slug) else getattr(themed, slug)
             setattr(themed, slug, dots)
@@ -451,7 +516,7 @@ def build_scenes(quick=False):
                 cx = x + pw / 2 - 45 + j * 30
                 ka = ease((t - 0.8 - i * 0.15 - j * 0.05) / 0.4)
                 if ka > 0:
-                    ImageDraw.Draw(c).ellipse([cx - 9, 808 - 9, cx + 9, 808 + 9], fill=rgb + (round(255 * ka),))
+                    Draw(c).ellipse([cx - 9, 808 - 9, cx + 9, 808 + 9], fill=rgb + (round(255 * ka),))
     scenes.append((6.2, themed))
 
     # 6. Actualizaciones
@@ -464,10 +529,10 @@ def build_scenes(quick=False):
             if k <= 0:
                 continue
             fnt = inter("Medium", 40)
-            tw = ImageDraw.Draw(c).textlength(line, font=fnt)
+            tw = Draw(c).textlength(line, font=fnt)
             x = W / 2 - tw / 2 + 28
-            ImageDraw.Draw(c).ellipse([x - 64, y - 18, x - 28, y + 18], fill=tint + (round(255 * k),))
-            ImageDraw.Draw(c).line([(x - 55, y), (x - 48, y + 8), (x - 36, y - 8)], fill=(0, 0, 0, round(255 * k)), width=4)
+            Draw(c).ellipse([x - 64, y - 18, x - 28, y + 18], fill=tint + (round(255 * k),))
+            Draw(c).line([(x - 55, y), (x - 48, y + 8), (x - 36, y - 8)], fill=(0, 0, 0, round(255 * k)), width=4)
             text_in(c, (x, y), line, fnt, WHITE, t, 0.5 + i * 0.35, 0.6, anchor="lm", rise=14)
     scenes.append((5.4, updates))
 
@@ -478,30 +543,29 @@ def build_scenes(quick=False):
         text_in(c, (W / 2, 452), T["out_s"], inter("Regular", 38), GRAY, t, 0.3)
         k = ease((t - 0.8) / 0.7)
         if k > 0:
-            mono = ImageFont.truetype(MONO, 28)
-            d = ImageDraw.Draw(c)
-            tw = max(d.textlength(line, font=mono) for line in INSTALL)
+            fm = mono(28)
+            d = Draw(c)
+            tw = max(d.textlength(line, font=fm) for line in INSTALL)
             bx, by = W / 2 - tw / 2 - 40, 548 + 16 * (1 - k)
             d.rounded_rectangle([bx, by, bx + tw + 80, by + 128], 24, fill=(28, 28, 30, round(255 * k)),
                                 outline=(255, 255, 255, round(28 * k)), width=2)
             for j, line in enumerate(INSTALL):
-                d.text((bx + 40, by + 44 + j * 42), line, font=mono, fill=WHITE + (round(255 * k),), anchor="lm")
+                d.text((bx + 40, by + 44 + j * 42), line, font=fm, fill=WHITE + (round(255 * k),), anchor="lm")
         text_in(c, (W / 2, 760), "github.com/thealejandro/omarchy-screensaver-fx", inter("Medium", 32), tint, t, 1.3)
         text_in(c, (W / 2, 812), "thealejandro.dev/omarchy/screensaver", inter("Regular", 30), GRAY, t, 1.5)
         k = ease((t - 1.9) / 0.7)
         if k > 0 and (logo := brand_logo(34)):
-            lg = logo.copy()
-            lg.putalpha(lg.getchannel("A").point(lambda a: round(a * k)))
-            c.alpha_composite(lg, (round(W / 2 - lg.width / 2), round(940 + 10 * (1 - k))))
+            paste_logo(c, logo, 940, k)
     scenes.append((5.6, outro))
     return scenes
 
 
 def render(lang, scenes, out_mp4, fade=0.35):
     total = sum(sc[0] for sc in scenes)
-    print(f"Renderizando {lang}: {total:.1f}s, {round(total * FPS)} fotogramas")
+    size = (px(W), px(H))
+    print(f"Renderizando {lang}: {size[0]}x{size[1]}, {total:.1f}s, {round(total * FPS)} fotogramas")
     ff = subprocess.Popen([
-        "ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{W}x{H}",
+        "ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{size[0]}x{size[1]}",
         "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "slow", "-crf", "18",
         "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(out_mp4)], stdin=subprocess.PIPE)
     n = 0
@@ -509,12 +573,12 @@ def render(lang, scenes, out_mp4, fade=0.35):
         fd = opt[0] if opt else fade  # fundido propio de la escena (0 = corte seco)
         for i in range(round(dur * FPS)):
             t = i / FPS
-            c = Image.new("RGBA", (W, H), BLACK + (255,))
+            c = Image.new("RGBA", size, BLACK + (255,))
             fn(c, t, lang)
             k = min(1.0, t / fd, (dur - t) / fd) if fd else 1.0
             img = c.convert("RGB")
             if k < 1:
-                img = ImageChops.multiply(img, Image.new("RGB", (W, H), (round(255 * k),) * 3))
+                img = ImageChops.multiply(img, Image.new("RGB", size, (round(255 * k),) * 3))
             ff.stdin.write(img.tobytes())
             n += 1
             if n % 150 == 0:
@@ -527,7 +591,7 @@ def render(lang, scenes, out_mp4, fade=0.35):
 def encode_extras(lang, mp4, scenes):
     webm = DOCS / f"demo-{lang}.webm"
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(mp4), "-c:v", "libvpx-vp9", "-b:v", "0",
-                    "-crf", "36", "-row-mt", "1", "-deadline", "good", "-cpu-used", "2", str(webm)], check=True)
+                    "-crf", "30", "-row-mt", "1", "-deadline", "good", "-cpu-used", "2", str(webm)], check=True)
     # Póster: el tríptico de temas a mitad de escena
     starts, acc = [], 0.0
     for d, _ in scenes:
@@ -558,9 +622,9 @@ def shots():
     d.mkdir(parents=True, exist_ok=True)
     when = {"neon": 3.6, "starfield": 4.2, "terminal": 3.4, "glitch": 2.0, "plasma": 3.0, "clock": 3.0}
     for name in OWN:
-        fr = pickle.loads((CACHE / f"fx-{name}.pkl").read_bytes())
+        fr = pickle.loads((CACHE / f"fx-{name}{'-en' if name == 'clock' else ''}.pkl").read_bytes())
         f = max(fr, key=len) if name == "glitch" else frame_at(fr, when[name])  # en plena ráfaga
-        render_term(f).resize((750, 450), Image.LANCZOS).save(d / f"{name}.png", optimize=True)
+        render_term(f).save(d / f"{name}.png", optimize=True)  # 1500x900, nítida en pantallas HiDPI
 
 
 def main():
