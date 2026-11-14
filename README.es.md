@@ -7,6 +7,14 @@
 
 # omarchy-screensaver-fx
 
+> [!IMPORTANT]
+> **Este proyecto se ha trasladado a [screensaver-fx](https://github.com/thealejandro/screensaver-fx).**
+> Es el mismo salvapantallas reescrito en Rust para Windows, macOS y Linux (Omarchy),
+> con 41 efectos en lugar de 6. Este repositorio queda archivado y ya no se actualiza.
+> Para cambiar, ejecuta aquí `./uninstall.sh` y sigue las
+> [instrucciones para Omarchy](https://github.com/thealejandro/screensaver-fx/blob/main/README.es.md#linux-omarchy)
+> (su instalador también quita los enlaces antiguos). Demo en vivo: <https://thealejandro.dev/screensaver-fx>
+
 [English](README.md)
 
 ![Screensaver FX](docs/demo.gif)
